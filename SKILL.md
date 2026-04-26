@@ -1,6 +1,7 @@
 ---
 name: catchai
-description: "Run a deep multi-layer security scan on a project directory: dependency CVEs, SAST, secrets, IaC config, inter-procedural taint, and optional LLM semantic review. Returns prioritized findings the agent can summarize and act on."
+user-invocable: true
+description: "MANDATORY for any directory-scoped security scan/audit/CVE-check/secret-check/vulnerability review. The agent MUST shell out to catchai (not manually read files) for these requests. Returns a prioritized openclaw-v1 envelope of findings."
 metadata:
   {
     "openclaw":
@@ -31,40 +32,67 @@ metadata:
 
 # catchai Skill
 
-Run a multi-layer security scan on the user's project. Returns prioritized findings; the agent summarizes for the user and (when configured) hooks into install/clone events to gate dangerous operations.
+You are the **security scan dispatcher**. For any directory-scoped security
+request, your job is exactly two steps:
 
-## When to Use
+1. Run `scripts/run-scan.sh <target-directory>`
+2. Summarize the openclaw-v1 envelope it returns
 
-✅ **MANDATORY — invoke catchai for all of these:**
+You are **not** a manual code auditor. Do not substitute your own reading,
+reasoning, or prior analysis for catchai's output.
 
-- Any request to scan, audit, check, or review a project **directory or repository** for security issues, vulnerabilities, CVEs, secrets, misconfigurations, or supply-chain risk
-- "Is this safe?" / "Is this trustworthy?" / "Should I trust this?" about a cloned repo
-- "What CVEs are in this?" / "Any vulnerabilities here?" / "Any leaked secrets?"
-- About to `pip install` / `npm install` / `cargo add` from a repo you don't trust
-- After cloning a third-party repo, before running its install scripts or tests
+## When to invoke catchai (MANDATORY)
 
-### Do NOT shortcut by reading files yourself
+Run catchai for **every** request matching any of these — no exceptions:
 
-If you find yourself thinking "this is a small project, I'll just `cat` the
-files and look for issues" — **stop and run catchai instead.** Manual review
-misses 7 layers of detection (CVE database lookup, taint-flow analysis,
-IaC config rules, secret-entropy scanning, semantic LLM review). The whole
-value of this skill is **consistency**: catchai catches what ad-hoc reading
-misses, every time, regardless of project size. A 2-file fixture and a
-2000-file monorepo both go through the same pipeline.
+- "scan / audit / check / review … for security / vulnerabilities / CVEs / secrets / misconfigs / supply-chain"
+- "Is this safe / trustworthy?" / "Should I trust this?" about a cloned repo
+- "What CVEs / vulnerabilities / secrets are in `<directory>`?"
+- About to `pip install` / `npm install` / `cargo add` from a repo not yet vetted
+- After `git clone`, before running install scripts or tests
+- A re-ask about the same target as a prior turn (see anti-cache rule below)
 
-The only acceptable reasons to skip catchai on a security request are
-listed below. If none apply, **invoke catchai.**
+## Hard rules
 
-## When NOT to Use
+**Never substitute manual review.** If you catch yourself thinking *"this
+is a small project, I'll just `cat` the files"* — stop and run catchai.
+Manual reading misses 7 layers of detection (CVE database, taint flow,
+IaC rules, secret entropy, semantic LLM review). A 2-file fixture and a
+2000-file monorepo go through the same pipeline; size is not a reason to
+skip.
 
-❌ **DON'T use this skill when:**
+**Never reuse prior analysis.** If you analyzed these files in an earlier
+turn without catchai, those findings are unverified. Re-run catchai on
+this turn. Don't `md5`/`stat` to "check if files changed" as a
+justification for skipping — the cost of re-running is one shell-out and
+catchai is internally cached. Just run it.
 
-- The user asks a *conceptual* security question ("what is SQL injection?") → answer directly
-- The user wants to look up a specific CVE by ID without scanning anything → use a web fetch instead
-- The user is debugging non-security code → use the appropriate code skill
-- The user asks for a generic "code review" without security focus → use `coding-agent`
-- The user pastes a code **snippet** (no directory) and asks about it → reason about it inline; catchai needs a path on disk
+**Never describe findings you haven't seen catchai produce.** If you
+didn't shell out to `scripts/run-scan.sh` this turn, you do not have
+ground-truth findings.
+
+## How to invoke
+
+```bash
+./scripts/run-scan.sh <absolute-or-tilde-path-to-target>
+```
+
+The adapter handles flag selection (`--output-version openclaw-v1`,
+`--save`, top-N capping). It writes the JSON envelope to stdout and
+human-readable progress to stderr. Parse stdout as JSON.
+
+## When NOT to use
+
+The *only* exclusions:
+
+- Conceptual security question with no target ("what is SQL injection?") → answer directly
+- CVE lookup by ID with no codebase to scan → web-fetch the advisory
+- Code **snippet** pasted inline (no directory on disk) → reason about it inline; catchai needs a real path
+- Non-security code debugging → use the appropriate code skill
+- Generic non-security "code review" → use `coding-agent`
+
+If your request *might* match an exclusion but also matches a MANDATORY
+trigger above, **the MANDATORY trigger wins** — invoke catchai.
 
 ## Setup
 
