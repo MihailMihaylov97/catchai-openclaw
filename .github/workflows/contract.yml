@@ -71,6 +71,14 @@ jobs:
     # public read access to wheels or a CI license key — both should
     # only run on trusted code paths. PRs from the repo's own branches
     # and pushes to main do run it.
+    #
+    # Load-bearing as of catchai v0.0.1: a CI failure here means either
+    # the install path is broken or the openclaw-v1 contract drifted.
+    # Both are real correctness signals; both should block the PR.
+    #
+    # We fetch install.sh from raw.githubusercontent.com directly
+    # because ``install.catchai.io`` DNS is not configured yet. Swap to
+    # the brand URL once that lands; behavior is identical.
     name: End-to-end contract test
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
@@ -89,7 +97,9 @@ jobs:
         env:
           CATCHAI_LICENSE_KEY: ${{ secrets.CATCHAI_CI_LICENSE_KEY }}
         run: |
-          curl -fsSL https://install.catchai.io | bash
+          curl -fsSL \
+            https://raw.githubusercontent.com/MihailMihaylov97/catchai-dist/main/install.sh \
+            | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run contract test
