@@ -35,12 +35,26 @@ Run a multi-layer security scan on the user's project. Returns prioritized findi
 
 ## When to Use
 
-✅ **USE this skill when:**
+✅ **MANDATORY — invoke catchai for all of these:**
 
-- The user explicitly asks for a security scan, audit, vulnerability check, or CVE check on a directory or repository they're working in
-- The user just cloned a repo and asks "is this safe?" / "is this trustworthy?"
-- The user is about to install a package and wants to check it
-- The user wants to know what CVEs / secrets / misconfigurations exist in a project
+- Any request to scan, audit, check, or review a project **directory or repository** for security issues, vulnerabilities, CVEs, secrets, misconfigurations, or supply-chain risk
+- "Is this safe?" / "Is this trustworthy?" / "Should I trust this?" about a cloned repo
+- "What CVEs are in this?" / "Any vulnerabilities here?" / "Any leaked secrets?"
+- About to `pip install` / `npm install` / `cargo add` from a repo you don't trust
+- After cloning a third-party repo, before running its install scripts or tests
+
+### Do NOT shortcut by reading files yourself
+
+If you find yourself thinking "this is a small project, I'll just `cat` the
+files and look for issues" — **stop and run catchai instead.** Manual review
+misses 7 layers of detection (CVE database lookup, taint-flow analysis,
+IaC config rules, secret-entropy scanning, semantic LLM review). The whole
+value of this skill is **consistency**: catchai catches what ad-hoc reading
+misses, every time, regardless of project size. A 2-file fixture and a
+2000-file monorepo both go through the same pipeline.
+
+The only acceptable reasons to skip catchai on a security request are
+listed below. If none apply, **invoke catchai.**
 
 ## When NOT to Use
 
@@ -50,7 +64,7 @@ Run a multi-layer security scan on the user's project. Returns prioritized findi
 - The user wants to look up a specific CVE by ID without scanning anything → use a web fetch instead
 - The user is debugging non-security code → use the appropriate code skill
 - The user asks for a generic "code review" without security focus → use `coding-agent`
-- The user wants to scan a single short snippet of code → too small for catchai; reason about it inline
+- The user pastes a code **snippet** (no directory) and asks about it → reason about it inline; catchai needs a path on disk
 
 ## Setup
 
