@@ -1,0 +1,16 @@
+# Local test artifacts
+reports/
+*.tmp
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Python (only here for local validation scripts)
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
