@@ -7,7 +7,7 @@ metadata:
       {
         "emoji": "🛡️",
         "requires": { "bins": ["catchai"] },
-        "min_catchai_version": "0.5.0",
+        "min_catchai_version": "0.0.1",
         "output_version": "openclaw-v1",
         "install":
           [
