@@ -17,7 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/users")
 public class UserController {
 
-    private static final String JWT_SECRET = "supersecret123456789012345678901234567890";
+    private static final String JWT_SECRET = "8K3pQ9wL2mN5xR7vF1bH4cZ6yT0sJ3uA8K3pQ9wL";
+    private static final String AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
 
     @Autowired
     private ProjectService projectService;
