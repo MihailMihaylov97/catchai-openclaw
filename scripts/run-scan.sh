@@ -84,8 +84,11 @@ run_scan() {
     "${CMD[@]}" > "$OUT_FILE" 2> "$ERR_FILE"
 }
 
-run_scan
-RC=$?
+# `set -e` would exit on non-zero from run_scan even though we explicitly
+# handle exit 1 (blocking findings) below. Use `|| RC=$?` to capture
+# without triggering set -e.
+RC=0
+run_scan || RC=$?
 
 # catchai uses exit 1 to signal "findings exist that block CI" — that's
 # a successful scan with results, not a failure of the tool. Anything
@@ -124,8 +127,8 @@ if [[ "${CATCHAI_SEMANTIC:-1}" != "0" ]] && command -v jq >/dev/null 2>&1; then
         # safe because no other token in the array equals "flows".
         CMD=("${CMD[@]/flows/files}")
         echo "L7 fallback: flows mode produced no findings; re-running with --semantic-mode files." >> "$ERR_FILE"
-        run_scan
-        RC=$?
+        RC=0
+        run_scan || RC=$?
         if [[ $RC -ne 0 && $RC -ne 1 ]]; then
             cat "$ERR_FILE" >&2
             cat "$OUT_FILE"
