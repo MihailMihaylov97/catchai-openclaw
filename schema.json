@@ -12,6 +12,7 @@
     "target",
     "catchai_version",
     "summary",
+    "headline",
     "top_findings",
     "findings_truncated",
     "artifacts"
@@ -68,6 +69,11 @@
           "description": "True iff at least one critical or high finding exists."
         }
       }
+    },
+    "headline": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pre-composed user-facing summary of the scan, intended to be relayed verbatim by the calling agent. Markdown-formatted. Aggregates dependency CVE walls into single bullets and surfaces unique-per-layer findings (especially L7) that would otherwise be outranked out of top_findings. Designed so the agent does not need to reason about 67-finding result sets — it just prints this string."
     },
     "top_findings": {
       "type": "array",
