@@ -69,6 +69,11 @@
         }
       }
     },
+    "headline": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pre-composed user-facing summary of the scan, intended to be relayed verbatim by the calling agent. Markdown-formatted. Aggregates dependency CVE walls into single bullets and surfaces unique-per-layer findings (especially L7) that would otherwise be outranked out of top_findings. Optional in this schema revision: shipped by catchai >= 0.0.1 binaries that have the headline composer, ignored by older binaries. Will be promoted to `required` in a follow-up schema revision once the floor of supported binary versions guarantees its presence — that ordering is the standard phased rollout for adding a required field to a contract with live consumers."
+    },
     "top_findings": {
       "type": "array",
       "items": { "$ref": "#/$defs/Finding" },

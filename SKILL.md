@@ -165,60 +165,59 @@ The adapter returns a JSON document matching `schema.json` in this repo. Top-lev
 
 ## How to Summarize for the User
 
-**Be terse. Show the user what they need to act on, not the full envelope.**
+**Display the `headline` field verbatim. That's the entire job.**
 
-The catchai openclaw-v1 envelope is rich (CWE IDs, OWASP categories,
-priority scores, taint paths, remediation steps). The user does not want
-to read all of that. They want to know: *is something on fire, and if so,
-what is it.*
+Catchai composes the user-facing summary server-side and emits it as
+the `headline` field of the openclaw-v1 envelope. It already:
 
-### Decision tree
+- Aggregates the dependency CVE wall into single bullets (so the user
+  sees `8× Vulnerable Dependency` instead of 8 nearly-identical lines)
+- Surfaces unique-per-layer findings (L7 path traversal, authz misses,
+  IaC graph rules) that would otherwise get outranked out of
+  `top_findings` and never reach the user
+- Formats severity badges, includes the full-report link, and uses the
+  same shape every time
 
-- **No critical or high findings** (`summary.critical == 0` and `summary.high == 0`):
-  one line, no list.
-  ```
-  ✓ Scan clean — N findings total (M medium, L low). Full report: <artifacts.html_report>
-  ```
+Your job is one line:
 
-- **One or more critical or high findings**: lead with a short alarm
-  message, then list ONLY the critical/high entries from `top_findings`
-  (skip medium/low entirely in the bullet list).
-
-  Headline:
-  ```
-  🚨 Found N critical/high vulnerabilit{y|ies} in <target>.
-  ```
-
-  Per critical/high finding, **two pieces only**:
-  - **What we found** — the finding `title`
-  - **What could go wrong** — one short sentence from `description`
-
-  Format each as:
-  ```
-  • <title>
-    What could go wrong: <one-sentence summary of description>
-  ```
-
-### What NOT to include in the user-facing summary
-
-- ❌ CWE IDs, OWASP category strings, priority scores
-- ❌ `detected_by`, `confidence`, `layer`, `rule_id`
-- ❌ File paths and line numbers (the user can read the linked report
-  for that — keep the chat reply scannable)
-- ❌ Remediation steps in the headline summary (offer them on follow-up:
-  *"Want me to walk through fixes?"*)
-- ❌ Medium/low findings in the bullet list (the count goes in the
-  headline, the details go in the full report)
-
-### After the summary
-
-End with the report link so the user can drill in if they want detail:
 ```
-Full report (all severities, with remediation): <artifacts.html_report>
+print(envelope["headline"])
 ```
 
-If `artifacts` is empty (the user asked for a one-shot scan without
-`--save`), say so and offer to re-run with `--save`.
+Do not re-summarize. Do not reformat. Do not add CWE IDs, OWASP
+categories, priority scores, or per-finding remediation. Do not list
+findings from `top_findings` separately — they are already represented
+in `headline`. Do not paraphrase the headline into your own words. The
+whole point is consistent output that doesn't depend on LLM creativity
+in the summary stage.
+
+### When to add anything beyond the headline
+
+Only when the user explicitly asks. Examples:
+
+- *"What are the top CVEs?"* → list specific entries from `top_findings`
+- *"Walk me through fixing these"* → quote the `remediation` field
+  per relevant finding
+- *"Show me the full report"* → link to `artifacts.html_report`
+
+Never preempt these — wait for the user to ask, then drill into the
+envelope as needed.
+
+### Edge cases
+
+- **`headline` empty or missing.** Possible when running against an
+  older catchai binary that pre-dates the headline composer. Fall back
+  to a one-line summary derived from `summary`:
+  ```
+  Scanned <basename of target> — <total> findings
+  (<critical> critical, <high> high, <medium> medium, <low> low).
+  Full report: <artifacts.html_report or "(not saved)">.
+  ```
+  Do not list individual findings in this fallback — the same agent
+  variance the headline was designed to eliminate would creep back in.
+  Suggest the user upgrade catchai if they want the richer summary.
+- **`artifacts` empty** (user ran without `--save`). The headline
+  already calls this out; no extra action needed.
 
 ## Safety / Network / Cost
 
