@@ -43,9 +43,18 @@ fi
 
 # Run the scan with the openclaw-v1 envelope. --save persists reports
 # to disk so the artifacts block in the output points at real files
-# the agent can navigate to. --semantic is opt-out via env var; the
-# default skips L7 to keep latency / token cost predictable on
-# auto-triggered scans.
+# the agent can navigate to.
+#
+# Layer 7 (semantic / LLM) is on by default in `flows` mode — flows mode
+# follows taint paths across functions, which catches the cross-file
+# cases that L2/L5 alone miss and which are the whole point of paying
+# for an LLM layer. Set `CATCHAI_SEMANTIC=0` to disable for cost/latency
+# control (e.g. high-frequency CI use).
+#
+# Cost note: L7 typically runs $0.50–$2 per scan against current
+# Sonnet pricing. If catchai can't find Anthropic credentials, L7 is
+# silently skipped with a `layer7-health/missing-credentials` info
+# finding rather than failing the scan.
 #
 # The whole command is built into a single CMD array (always non-empty)
 # rather than expanding a separate empty SEMANTIC_FLAG=() array at call
@@ -59,8 +68,8 @@ CMD=(
     --output-top-n "${CATCHAI_TOP_N:-10}"
     --save
 )
-if [[ "${CATCHAI_SEMANTIC:-0}" == "1" ]]; then
-    CMD+=(--semantic)
+if [[ "${CATCHAI_SEMANTIC:-1}" != "0" ]]; then
+    CMD+=(--semantic --semantic-mode flows)
 fi
 
 # stderr is forwarded as-is so the agent sees catchai's progress and

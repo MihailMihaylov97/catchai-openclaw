@@ -165,19 +165,60 @@ The adapter returns a JSON document matching `schema.json` in this repo. Top-lev
 
 ## How to Summarize for the User
 
-Use the `summary` block for the headline:
+**Be terse. Show the user what they need to act on, not the full envelope.**
 
+The catchai openclaw-v1 envelope is rich (CWE IDs, OWASP categories,
+priority scores, taint paths, remediation steps). The user does not want
+to read all of that. They want to know: *is something on fire, and if so,
+what is it.*
+
+### Decision tree
+
+- **No critical or high findings** (`summary.critical == 0` and `summary.high == 0`):
+  one line, no list.
+  ```
+  ✓ Scan clean — N findings total (M medium, L low). Full report: <artifacts.html_report>
+  ```
+
+- **One or more critical or high findings**: lead with a short alarm
+  message, then list ONLY the critical/high entries from `top_findings`
+  (skip medium/low entirely in the bullet list).
+
+  Headline:
+  ```
+  🚨 Found N critical/high vulnerabilit{y|ies} in <target>.
+  ```
+
+  Per critical/high finding, **two pieces only**:
+  - **What we found** — the finding `title`
+  - **What could go wrong** — one short sentence from `description`
+
+  Format each as:
+  ```
+  • <title>
+    What could go wrong: <one-sentence summary of description>
+  ```
+
+### What NOT to include in the user-facing summary
+
+- ❌ CWE IDs, OWASP category strings, priority scores
+- ❌ `detected_by`, `confidence`, `layer`, `rule_id`
+- ❌ File paths and line numbers (the user can read the linked report
+  for that — keep the chat reply scannable)
+- ❌ Remediation steps in the headline summary (offer them on follow-up:
+  *"Want me to walk through fixes?"*)
+- ❌ Medium/low findings in the bullet list (the count goes in the
+  headline, the details go in the full report)
+
+### After the summary
+
+End with the report link so the user can drill in if they want detail:
 ```
-Scanned <target>: <total> findings (<critical> critical, <high> high, <medium> medium, <low> low).
+Full report (all severities, with remediation): <artifacts.html_report>
 ```
 
-Then quote the top 3-5 findings from `top_findings`, each as one bullet:
-
-```
-- [<severity>] <title> at <location.file>:<location.line> — <remediation>
-```
-
-If `findings_truncated`, point at `artifacts.html_report` for the full list. If `artifacts` is empty, suggest re-running with `--save`.
+If `artifacts` is empty (the user asked for a one-shot scan without
+`--save`), say so and offer to re-run with `--save`.
 
 ## Safety / Network / Cost
 
