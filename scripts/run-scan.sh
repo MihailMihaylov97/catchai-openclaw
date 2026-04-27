@@ -46,19 +46,27 @@ fi
 # the agent can navigate to. --semantic is opt-out via env var; the
 # default skips L7 to keep latency / token cost predictable on
 # auto-triggered scans.
-SEMANTIC_FLAG=()
+#
+# The whole command is built into a single CMD array (always non-empty)
+# rather than expanding a separate empty SEMANTIC_FLAG=() array at call
+# time. The latter trips `set -u` on bash 3.2 (macOS default; OpenClaw's
+# exec shell) — `"${SEMANTIC_FLAG[@]}"` on an empty array fires
+# "unbound variable". Building one always-populated array sidesteps the
+# whole class of expansion bug.
+CMD=(
+    catchai scan "$TARGET"
+    --output-version openclaw-v1
+    --output-top-n "${CATCHAI_TOP_N:-10}"
+    --save
+)
 if [[ "${CATCHAI_SEMANTIC:-0}" == "1" ]]; then
-    SEMANTIC_FLAG+=(--semantic)
+    CMD+=(--semantic)
 fi
 
 # stderr is forwarded as-is so the agent sees catchai's progress and
 # any stderr-warnings (e.g. the L7 deprecation notice). stdout is the
 # JSON envelope.
-if ! catchai scan "$TARGET" \
-        --output-version openclaw-v1 \
-        --output-top-n "${CATCHAI_TOP_N:-10}" \
-        --save \
-        "${SEMANTIC_FLAG[@]}"; then
+if ! "${CMD[@]}"; then
     rc=$?
     # catchai uses exit 1 to signal "findings exist that block CI" — that
     # is a successful scan with results, not a failure of the tool itself.
