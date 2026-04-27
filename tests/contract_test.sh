@@ -208,22 +208,33 @@ ok "java fixture matches openclaw-v1 schema"
 # saved report has the full list.
 #
 # Layers split by current binary readiness (v0.0.1 baseline):
-#   - REQUIRED_LAYERS:    always shipping in the v0.0.1 baseline
+#   - REQUIRED_LAYERS: always shipping in the v0.0.1 baseline
 #       L1 (dependency): Trivy/Grype always work on Java
 #       L3 (secrets):    gitleaks always works
-#   - PENDING_LAYERS: present in dev but not in the released binary;
-#                     promote to REQUIRED once v0.0.2 ships
-#       L2 (sast):  Phase 1.2 rules merged in PR #87, awaiting release
-#       L6 (authz): Phase 1.3 rules merged in PR #96, awaiting release
+#   - PENDING_LAYERS_AS_OF: each entry is `layer:min-catchai-version`.
+#       Once the installed catchai is >= that version, the layer is
+#       enforced as REQUIRED (a 0-finding count fails the test). Until
+#       then, missing findings emit an informational warning.
+#       This removes the manual "remember to move sast from PENDING to
+#       REQUIRED after the release" step that the previous structure
+#       silently relied on.
 #   - FUTURE_LAYERS: blocked on later phases of the Java parity work
-#       L4 (infra):    Phase 2 (Spring config auditor) — not built
-#       L5 (taint):    Phase 3 (tree-sitter Java callgraph) — not built
+#       L4 (infra):    Phase 2 — Spring config auditor (catchai PR #103)
+#       L5 (taint):    Phase 3 — tree-sitter Java callgraph (catchai PR #104)
 #   - L7 (semantic): always works in principle but needs Anthropic creds
 SAVED=$(jq -r '.artifacts.json_report' "$JAVA_OUTPUT")
 [[ -f "$SAVED" ]] || fail "java fixture: saved JSON report missing at $SAVED"
 
 REQUIRED_LAYERS=(dependency secrets)
-PENDING_LAYERS=(sast authz)
+# layer:min-version pairs — once installed catchai >= min-version, the
+# layer is enforced. Add new entries when shipping new Java rules; bump
+# the min-version when a PR lands in a tagged catchai release.
+#   sast  → 0.0.2  Phase 1.2 SAST rules (catchai PR #87)
+#   authz → 0.0.2  Phase 1.3 authz rules (catchai PR #96)
+PENDING_LAYERS_AS_OF=(
+    "sast:0.0.2"
+    "authz:0.0.2"
+)
 FUTURE_LAYERS=(infra taint)
 
 for layer in "${REQUIRED_LAYERS[@]}"; do
@@ -234,15 +245,27 @@ for layer in "${REQUIRED_LAYERS[@]}"; do
     ok "java fixture: $layer found $count finding(s)"
 done
 
-# Pending layers — warn if missing but don't fail the test. Promote each
-# entry to REQUIRED_LAYERS in the same PR that ships the corresponding
-# binary release.
-for layer in "${PENDING_LAYERS[@]}"; do
+# Pending layers — version-gated. If installed catchai is at or past the
+# declared min-version, the layer becomes a hard requirement. Until
+# then, soft warning only.
+for entry in "${PENDING_LAYERS_AS_OF[@]}"; do
+    layer="${entry%%:*}"
+    min_version="${entry##*:}"
     count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED")
-    if [[ "$count" -lt 1 ]]; then
-        echo "  (warn: $layer found 0 findings — pending v0.0.2 release; promote to REQUIRED after release)" >&2
+    lower=$(printf '%s\n%s\n' "$min_version" "$ACTUAL_VERSION" | sort -V | head -1)
+    if [[ "$lower" == "$min_version" ]]; then
+        # ACTUAL_VERSION >= min_version — enforce.
+        if [[ "$count" -lt 1 ]]; then
+            fail "java fixture: $layer enforced as of catchai $min_version (you have $ACTUAL_VERSION) — got 0 findings"
+        fi
+        ok "java fixture: $layer found $count finding(s) (enforced as-of $min_version)"
     else
-        ok "java fixture: $layer found $count finding(s) (pending → ready, promote to REQUIRED)"
+        # ACTUAL_VERSION < min_version — soft.
+        if [[ "$count" -lt 1 ]]; then
+            echo "  (pending: $layer requires catchai >= $min_version; current $ACTUAL_VERSION — 0 findings is OK for now)" >&2
+        else
+            ok "java fixture: $layer found $count finding(s) early (will be enforced from $min_version)"
+        fi
     fi
 done
 
@@ -250,7 +273,7 @@ done
 for layer in "${FUTURE_LAYERS[@]}"; do
     count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED")
     if [[ "$count" -ge 1 ]]; then
-        ok "java fixture: $layer found $count finding(s) (future → ready, promote to REQUIRED)"
+        ok "java fixture: $layer found $count finding(s) (future → ready, consider promoting to PENDING_LAYERS_AS_OF)"
     fi
 done
 
