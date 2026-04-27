@@ -205,9 +205,17 @@ envelope as needed.
 
 ### Edge cases
 
-- **`headline` empty or missing.** Should not happen with catchai
-  ≥ 0.0.1, but if it does, fall back to a one-line summary from
-  `summary` counts.
+- **`headline` empty or missing.** Possible when running against an
+  older catchai binary that pre-dates the headline composer. Fall back
+  to a one-line summary derived from `summary`:
+  ```
+  Scanned <basename of target> — <total> findings
+  (<critical> critical, <high> high, <medium> medium, <low> low).
+  Full report: <artifacts.html_report or "(not saved)">.
+  ```
+  Do not list individual findings in this fallback — the same agent
+  variance the headline was designed to eliminate would creep back in.
+  Suggest the user upgrade catchai if they want the richer summary.
 - **`artifacts` empty** (user ran without `--save`). The headline
   already calls this out; no extra action needed.
 
