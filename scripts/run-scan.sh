@@ -72,16 +72,69 @@ if [[ "${CATCHAI_SEMANTIC:-1}" != "0" ]]; then
     CMD+=(--semantic --semantic-mode flows)
 fi
 
-# stderr is forwarded as-is so the agent sees catchai's progress and
-# any stderr-warnings (e.g. the L7 deprecation notice). stdout is the
-# JSON envelope.
-if ! "${CMD[@]}"; then
-    rc=$?
-    # catchai uses exit 1 to signal "findings exist that block CI" — that
-    # is a successful scan with results, not a failure of the tool itself.
-    # Anything else is a real binary error.
-    if [[ $rc -ne 1 ]]; then
-        echo "error: catchai exited with code $rc" >&2
-        exit 4
+# Capture stdout (the JSON envelope) and stderr (progress chatter)
+# separately so we can inspect the envelope without mixing the streams
+# the agent reads. Re-emit both at the end in the right places to
+# preserve the contract: stdout = openclaw-v1 JSON, stderr = chatter.
+OUT_FILE=$(mktemp)
+ERR_FILE=$(mktemp)
+trap 'rm -f "$OUT_FILE" "$ERR_FILE"' EXIT
+
+run_scan() {
+    "${CMD[@]}" > "$OUT_FILE" 2> "$ERR_FILE"
+}
+
+run_scan
+RC=$?
+
+# catchai uses exit 1 to signal "findings exist that block CI" — that's
+# a successful scan with results, not a failure of the tool. Anything
+# else is a real binary error and skips the L7 fallback below (no point
+# re-running a broken scan).
+if [[ $RC -ne 0 && $RC -ne 1 ]]; then
+    cat "$ERR_FILE" >&2
+    cat "$OUT_FILE"
+    echo "error: catchai exited with code $RC" >&2
+    exit 4
+fi
+
+# Layer 7 fallback: if `flows` mode produced zero L7 findings, re-run
+# with `files` mode. flows mode gates LLM calls on L5 taint paths —
+# fast and precise on real codebases, but produces nothing when L5
+# finds no inter-procedural flows (typical for small projects, single
+# files, or codebases without identifiable taint sources/sinks). files
+# mode runs the LLM directly on each candidate file and always produces
+# *some* signal as long as Anthropic credentials are configured.
+#
+# We pay for the second pass (extra LLM cost + scan time) only when the
+# first pass yielded nothing useful from L7 — exactly the case where the
+# extra cost is justified.
+#
+# `jq` is a soft dependency. Without it we can't inspect the saved
+# report, so we skip the fallback rather than guessing.
+if [[ "${CATCHAI_SEMANTIC:-1}" != "0" ]] && command -v jq >/dev/null 2>&1; then
+    SAVED_REPORT=$(jq -r '.artifacts.json_report // empty' "$OUT_FILE" 2>/dev/null)
+    L7_COUNT=0
+    if [[ -n "$SAVED_REPORT" && -f "$SAVED_REPORT" ]]; then
+        L7_COUNT=$(jq '[.findings[]? | select(.layer=="semantic")] | length' "$SAVED_REPORT" 2>/dev/null || echo 0)
+    fi
+
+    if [[ "$L7_COUNT" == "0" ]]; then
+        # Swap `flows` → `files` and re-run. The full CMD string-replace is
+        # safe because no other token in the array equals "flows".
+        CMD=("${CMD[@]/flows/files}")
+        echo "L7 fallback: flows mode produced no findings; re-running with --semantic-mode files." >> "$ERR_FILE"
+        run_scan
+        RC=$?
+        if [[ $RC -ne 0 && $RC -ne 1 ]]; then
+            cat "$ERR_FILE" >&2
+            cat "$OUT_FILE"
+            echo "error: catchai exited with code $RC during L7 fallback" >&2
+            exit 4
+        fi
     fi
 fi
+
+cat "$ERR_FILE" >&2
+cat "$OUT_FILE"
+exit "$RC"
