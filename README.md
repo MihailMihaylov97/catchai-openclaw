@@ -93,7 +93,7 @@ Environment variables read by `scripts/run-scan.sh`:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `CATCHAI_SEMANTIC` | `0` | Set to `1` to enable Layer 7 (LLM semantic review). Costs $0.50–$2 per scan at current pricing. |
+| `CATCHAI_SEMANTIC` | `1` | Layer 7 (LLM semantic review, `flows` mode) is on by default. Set to `0` to disable for cost/latency control. Costs $0.50–$2 per scan at current pricing. |
 | `CATCHAI_TOP_N` | `10` | Cap on `top_findings` in the envelope (0–100). |
 
 LLM credentials for Layer 7 are auto-discovered: catchai uses the
