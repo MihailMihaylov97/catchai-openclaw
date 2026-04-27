@@ -17,6 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/users")
 public class UserController {
 
+    // INTENTIONAL FIXTURE SECRETS — DO NOT REPLACE WITH PLACEHOLDERS.
+    // The contract_test.sh contract requires the catchai/gitleaks
+    // pipeline to surface these. JWT_SECRET is a high-entropy random
+    // string. AWS_ACCESS_KEY is the public AWS-docs example key
+    // (https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_iam-quotas.html);
+    // it is publicly known and matches gitleaks' AKIA[0-9A-Z]{16}
+    // regex deterministically across gitleaks versions, which is
+    // exactly what we want for a reproducible test.
     private static final String JWT_SECRET = "8K3pQ9wL2mN5xR7vF1bH4cZ6yT0sJ3uA8K3pQ9wL";
     private static final String AWS_ACCESS_KEY = "AKIAIOSFODNN7EXAMPLE";
 

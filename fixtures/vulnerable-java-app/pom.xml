@@ -9,6 +9,15 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
+    <!--
+        DELIBERATE CHOICE: Spring Boot 2.5.0 (released 2021-05, EOL).
+        We pick an old, EOL parent on purpose — the transitive
+        dependency tree pulls in Jackson, Tomcat-embedded, snakeyaml,
+        spring-core, etc. at versions with publicly known CVEs that
+        Layer 1 dep scanning MUST surface for the contract test to
+        pass. DO NOT bump unless a corresponding update to the
+        contract test's expected-CVE list lands in the same PR.
+    -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -25,6 +34,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!--
+            REQUIRED: spring-boot-starter-security must stay in this
+            fixture. Several Layer 6 (authz) rules check for
+            @PreAuthorize / @Secured patterns and rely on the
+            org.springframework.security.* namespace being on the
+            classpath. Removing this dep silently drops L6 coverage
+            on the fixture and the contract test will mis-pass.
+        -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
