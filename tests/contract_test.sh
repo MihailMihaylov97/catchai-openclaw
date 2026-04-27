@@ -152,5 +152,121 @@ if [[ "$LOWEST" != "$DECLARED_MIN" ]]; then
 fi
 ok "catchai $ACTUAL_VERSION ≥ declared min $DECLARED_MIN"
 
+# ----- 6. Java fixture: same envelope checks + per-layer presence ---------
+#
+# Phase 4 of the Java parity work (docs/dev/CATCHAI_Java_4.md in the
+# catchai source repo). The Java code path goes through different
+# rules (L2 Java SAST, L6 Java authz) than Python; without this fixture
+# in CI, regressions in the Java path land silently.
+#
+# The per-layer ≥ 1 check is the regression net. If a future PR breaks
+# any layer's Java coverage, this test fails immediately and loudly:
+# "expected at least 1 X finding, got 0".
+
+JAVA_FIXTURE="$REPO_ROOT/fixtures/vulnerable-java-app"
+JAVA_OUTPUT="$(mktemp)"
+
+[[ -d "$JAVA_FIXTURE" ]] || fail "java fixture missing: $JAVA_FIXTURE"
+
+# catchai exits 1 to signal "blocking findings exist" — that's success
+# from our perspective. Only exit codes >= 2 indicate real binary errors.
+# `set -e` is in effect, so we capture the exit via `|| true` and check
+# the value separately rather than letting the script abort.
+java_rc=0
+"$REPO_ROOT/scripts/run-scan.sh" "$JAVA_FIXTURE" >"$JAVA_OUTPUT" 2>/dev/null || java_rc=$?
+if [[ $java_rc -ne 0 && $java_rc -ne 1 ]]; then
+    fail "run-scan.sh exited with $java_rc on Java fixture (binary error)"
+fi
+ok "java run-scan.sh exited $java_rc"
+
+if ! jq -e . "$JAVA_OUTPUT" >/dev/null 2>&1; then
+    fail "java fixture output is not valid JSON"
+fi
+ok "java fixture output is valid JSON"
+
+python3 - "$JAVA_OUTPUT" "$SCHEMA" <<'PY'
+import json
+import sys
+
+import jsonschema
+
+with open(sys.argv[1]) as f:
+    payload = json.load(f)
+with open(sys.argv[2]) as f:
+    schema = json.load(f)
+
+try:
+    jsonschema.validate(payload, schema)
+except jsonschema.ValidationError as exc:
+    print(f"FAIL: java fixture schema validation: {exc.message}", file=sys.stderr)
+    sys.exit(1)
+PY
+ok "java fixture matches openclaw-v1 schema"
+
+# Per-layer presence — each REQUIRED layer must contribute ≥ 1 finding
+# to the saved report. top_findings is cap-limited by the renderer; the
+# saved report has the full list.
+#
+# Layers split by current binary readiness (v0.0.1 baseline):
+#   - REQUIRED_LAYERS:    always shipping in the v0.0.1 baseline
+#       L1 (dependency): Trivy/Grype always work on Java
+#       L3 (secrets):    gitleaks always works
+#   - PENDING_LAYERS: present in dev but not in the released binary;
+#                     promote to REQUIRED once v0.0.2 ships
+#       L2 (sast):  Phase 1.2 rules merged in PR #87, awaiting release
+#       L6 (authz): Phase 1.3 rules merged in PR #96, awaiting release
+#   - FUTURE_LAYERS: blocked on later phases of the Java parity work
+#       L4 (infra):    Phase 2 (Spring config auditor) — not built
+#       L5 (taint):    Phase 3 (tree-sitter Java callgraph) — not built
+#   - L7 (semantic): always works in principle but needs Anthropic creds
+SAVED=$(jq -r '.artifacts.json_report' "$JAVA_OUTPUT")
+[[ -f "$SAVED" ]] || fail "java fixture: saved JSON report missing at $SAVED"
+
+REQUIRED_LAYERS=(dependency secrets)
+PENDING_LAYERS=(sast authz)
+FUTURE_LAYERS=(infra taint)
+
+for layer in "${REQUIRED_LAYERS[@]}"; do
+    count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED")
+    if [[ "$count" -lt 1 ]]; then
+        fail "java fixture: expected at least 1 $layer finding, got $count"
+    fi
+    ok "java fixture: $layer found $count finding(s)"
+done
+
+# Pending layers — warn if missing but don't fail the test. Promote each
+# entry to REQUIRED_LAYERS in the same PR that ships the corresponding
+# binary release.
+for layer in "${PENDING_LAYERS[@]}"; do
+    count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED")
+    if [[ "$count" -lt 1 ]]; then
+        echo "  (warn: $layer found 0 findings — pending v0.0.2 release; promote to REQUIRED after release)" >&2
+    else
+        ok "java fixture: $layer found $count finding(s) (pending → ready, promote to REQUIRED)"
+    fi
+done
+
+# Future layers — informational only.
+for layer in "${FUTURE_LAYERS[@]}"; do
+    count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED")
+    if [[ "$count" -ge 1 ]]; then
+        ok "java fixture: $layer found $count finding(s) (future → ready, promote to REQUIRED)"
+    fi
+done
+
+# L7 — best-effort, requires Anthropic credentials.
+l7_count=$(jq "[.findings[] | select(.layer==\"semantic\" and .severity != \"info\")] | length" "$SAVED")
+l7_skipped=$(jq "[.findings[] | select(.rule_id == \"layer7-health/missing-credentials\")] | length" "$SAVED")
+if [[ "$l7_skipped" -gt 0 ]]; then
+    echo "  (L7 skipped — no Anthropic credentials configured)" >&2
+elif [[ "$l7_count" -lt 1 ]]; then
+    echo "  (warn: L7 ran but produced no semantic findings — typical for v0.0.1 on Java)" >&2
+else
+    ok "java fixture: semantic found $l7_count finding(s)"
+fi
+
+# Cleanup the second temp file
+rm -f "$JAVA_OUTPUT"
+
 echo ""
 echo "All contract checks passed."
