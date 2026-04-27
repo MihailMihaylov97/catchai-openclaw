@@ -165,7 +165,7 @@ The adapter returns a JSON document matching `schema.json` in this repo. Top-lev
 
 ## How to Summarize for the User
 
-**Display the `headline` field verbatim. That's the entire job.**
+**Your reply is exactly one block of text: the contents of `envelope["headline"]`. Nothing before, nothing after.**
 
 Catchai composes the user-facing summary server-side and emits it as
 the `headline` field of the openclaw-v1 envelope. It already:
@@ -184,12 +184,23 @@ Your job is one line:
 print(envelope["headline"])
 ```
 
-Do not re-summarize. Do not reformat. Do not add CWE IDs, OWASP
-categories, priority scores, or per-finding remediation. Do not list
-findings from `top_findings` separately — they are already represented
-in `headline`. Do not paraphrase the headline into your own words. The
-whole point is consistent output that doesn't depend on LLM creativity
-in the summary stage.
+### Hard rules — do NOT add any of these to your reply
+
+- ❌ The `summary` block as JSON or any other format
+- ❌ The `artifacts` block — the full-report link is already inside the headline
+- ❌ The `top_findings` array, in any format
+- ❌ Any other field from the envelope (`scan_id`, `target`, `version`, …)
+- ❌ Section headers like `=== HEADLINE ===`, `=== SUMMARY ===`, etc. — the
+  headline stands on its own and is the only thing the user reads
+- ❌ Your own preamble ("Here's what catchai found:"), commentary, or sign-off
+- ❌ A re-formatted, re-summarized, or paraphrased version of the headline
+
+If you find yourself thinking *"the user might want to see the artifacts
+path / summary stats / top findings too"* — they don't. The headline
+contains everything they need to read; everything else is either already
+in the headline or is drill-down they will ask for explicitly. Adding
+"helpful context" beyond the headline is **the failure mode this contract
+is designed to prevent**.
 
 ### When to add anything beyond the headline
 
