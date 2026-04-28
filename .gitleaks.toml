@@ -1,0 +1,37 @@
+# Local gitleaks config for the openclaw repo.
+#
+# Brutal-review issue #10 from the Java parity initiative: a developer
+# running `gitleaks detect` at the repo root (e.g. as a pre-commit
+# hook or "did I just paste a real secret?" check) was getting hits
+# on the deliberate-secrets in fixtures/. Those exist solely to be
+# detected by catchai's gitleaks invocation in tests/contract_test.sh
+# — they are NOT real leaks.
+#
+# This file inherits gitleaks' default ruleset (no rules block here)
+# and adds a path-based allowlist that excludes the entire fixtures/
+# tree. The contract test is unaffected:
+#
+#   catchai/layer3/tools/gitleaks.py always invokes gitleaks with
+#   `--config <bundled-config-path>`. With --config, gitleaks loads
+#   ONLY the specified config and ignores any local .gitleaks.toml
+#   in the working tree. Verified: gitleaks 8.30.1 with --config
+#   pointing at catchai's bundle still finds the JWT_SECRET in the
+#   Java fixture; the same gitleaks invocation reading THIS local
+#   config returns 0 findings.
+#
+# If you ADD a fixture path outside of fixtures/, extend the regex
+# below to keep this protection.
+title = "openclaw — local gitleaks config (allowlists deliberate-secret fixtures)"
+
+[extend]
+# Inherit gitleaks' default rules. Without this, this config file
+# would override the rules entirely and a `gitleaks detect` at repo
+# root would find NOTHING — not what we want for actual secret leaks
+# in non-fixture paths.
+useDefault = true
+
+[allowlist]
+description = "Test fixtures intentionally embed secrets; not real leaks"
+paths = [
+    '''^fixtures/''',
+]
