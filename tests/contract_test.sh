@@ -218,9 +218,10 @@ ok "java fixture matches openclaw-v1 schema"
 #       This removes the manual "remember to move sast from PENDING to
 #       REQUIRED after the release" step that the previous structure
 #       silently relied on.
-#   - FUTURE_LAYERS: blocked on later phases of the Java parity work
-#       L4 (infra):    Phase 2 — Spring config auditor (catchai PR #103)
-#       L5 (taint):    Phase 3 — tree-sitter Java callgraph (catchai PR #104)
+#   - FUTURE_LAYERS: blocked on later phases of the Java parity work.
+#       Currently empty — Phase 3 just landed (catchai PRs #114 #117
+#       #120 #125 = callgraph + catalog + engine + scanner dispatch),
+#       so `taint` moved into PENDING_LAYERS_AS_OF below.
 #   - L7 (semantic): always works in principle but needs Anthropic creds
 SAVED=$(jq -r '.artifacts.json_report' "$JAVA_OUTPUT")
 [[ -f "$SAVED" ]] || fail "java fixture: saved JSON report missing at $SAVED"
@@ -231,11 +232,20 @@ REQUIRED_LAYERS=(dependency secrets)
 # the min-version when a PR lands in a tagged catchai release.
 #   sast  → 0.0.2  Phase 1.2 SAST rules (catchai PR #87)
 #   authz → 0.0.2  Phase 1.3 authz rules (catchai PR #96)
+#   taint → 0.0.2  Phase 3 L5 inter-procedural Java taint (catchai
+#                  PRs #114 callgraph, #117 catalog, #120 engine,
+#                  #125 scanner dispatch). The vulnerable-java-app
+#                  fixture's UserController.getUser does
+#                  HttpServletRequest.getParameter → string concat →
+#                  Statement.executeQuery, which Phase 3 detects
+#                  end-to-end. Once catchai 0.0.2 ships, this gate
+#                  fires hard if the engine ever silently regresses.
 PENDING_LAYERS_AS_OF=(
     "sast:0.0.2"
     "authz:0.0.2"
+    "taint:0.0.2"
 )
-FUTURE_LAYERS=(infra taint)
+FUTURE_LAYERS=(infra)
 
 for layer in "${REQUIRED_LAYERS[@]}"; do
     count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED")
