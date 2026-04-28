@@ -248,9 +248,30 @@ done
 # Pending layers — version-gated. If installed catchai is at or past the
 # declared min-version, the layer becomes a hard requirement. Until
 # then, soft warning only.
+#
+# Strict format: each entry MUST be exactly two colon-separated fields,
+# `layer:semver`. Anything else fails up-front rather than silently
+# turning into garbage parsing (e.g. "sast:1.0.0:hotfix" would
+# previously become min_version="hotfix" via ${entry##*:} and `sort -V`
+# would compare "hotfix" against catchai's real version, with
+# unpredictable enforcement).
 for entry in "${PENDING_LAYERS_AS_OF[@]}"; do
-    layer="${entry%%:*}"
-    min_version="${entry##*:}"
+    # Validate format BEFORE splitting — exactly one colon required.
+    colons=$(awk -F: '{print NF-1}' <<<"$entry")
+    if [[ "$colons" -ne 1 ]]; then
+        fail "PENDING_LAYERS_AS_OF entry '$entry' has $colons colons; expected exactly 1 (format: layer:semver)"
+    fi
+    IFS=':' read -r layer min_version <<<"$entry"
+    if [[ -z "$layer" || -z "$min_version" ]]; then
+        fail "PENDING_LAYERS_AS_OF entry '$entry' has empty layer or version"
+    fi
+    # Validate semver shape (X.Y.Z plus optional -prerelease) — catches
+    # the "I forgot a digit" / "I typed 'next'" / "I left a comment in
+    # the value" class of bug. Loose check; full semver is overkill.
+    if ! [[ "$min_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.+-]+)?$ ]]; then
+        fail "PENDING_LAYERS_AS_OF entry '$entry': '$min_version' is not a valid semver"
+    fi
+
     count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED")
     lower=$(printf '%s\n%s\n' "$min_version" "$ACTUAL_VERSION" | sort -V | head -1)
     if [[ "$lower" == "$min_version" ]]; then
