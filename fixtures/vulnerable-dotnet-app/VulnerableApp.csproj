@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    DELIBERATE CHOICE: target net6.0 (EOL November 2024) and pin
+    transitive deps at versions with publicly known CVEs. Layer 1 dep
+    scanning (Trivy/Grype reading PackageReference entries) MUST
+    surface the pinned vulnerabilities for the contract test to pass.
+    DO NOT bump these without a corresponding update to the
+    contract-test expected-CVE list in the same PR — bumping silently
+    would make the L1 gate mis-pass.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Newtonsoft.Json 12.0.1 — multiple GHSA-/CVE-numbered DoS
+      advisories. Old enough that EVERY major OSV provider carries it
+      (GitHub Advisory, NVD, Snyk), so Trivy + Grype both surface it
+      without having to special-case the .NET ecosystem.
+    -->
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.1" />
+
+    <!--
+      System.Text.Encodings.Web 4.7.0 — CVE-2021-26701 (RCE via
+      malformed input in System.Text.Encodings.Web parser). Microsoft
+      shipped 4.7.2 as the patched line. We intentionally pin the
+      vulnerable predecessor so L1 has something deterministic to
+      flag in the .NET ecosystem.
+    -->
+    <PackageReference Include="System.Text.Encodings.Web" Version="4.7.0" />
+
+    <!--
+      Microsoft.Data.SqlClient 2.0.0 — needed for SqlCommand /
+      SqlConnection symbols used by the L2/L5 SQL-injection chain.
+      Older line; carries known advisories of its own.
+    -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="2.0.0" />
+  </ItemGroup>
+
+</Project>
