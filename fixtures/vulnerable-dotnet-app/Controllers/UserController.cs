@@ -27,7 +27,7 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public IActionResult GetUser(string id)
+    public IActionResult GetUser([FromRoute] string id)
     {
         using var conn = new SqlConnection("Server=.;Database=test;Integrated Security=true;");
         conn.Open();

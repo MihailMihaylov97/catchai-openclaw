@@ -371,11 +371,18 @@ ok ".NET fixture matches openclaw-v1 schema"
 #       (a 0-finding count fails the test). Until then, missing
 #       findings emit an informational warning.
 #   - FUTURE_LAYERS_DOTNET: blocked on later phases — currently empty.
-#       The .NET initiative shipped L2/L4/L5/L6 in catchai PRs #163
-#       (catalog), #166 (L2 SAST), #168 (L4 .NET config), #169 (L6
-#       authz), #173 (L3.1 callgraph), #176 (L3.2 catalog), #179
-#       (L3.3 engine), #182 (L3.3.b property flow), #184 (L3.4
-#       scanner dispatch). All landed for the next release line.
+#       The .NET initiative shipped L1/L2/L4/L5/L6 in catchai PRs:
+#         #161 (Phase 1.1 framework catalog),
+#         #165 (Phase 1.2 L2 C# SAST rules),
+#         #166 (Phase 1.3 L6 C# authz rules),
+#         #170 (Phase 2   L4 .NET appsettings.json rules),
+#         #175 (Phase 3.1 C# callgraph + tree-sitter wrapper),
+#         #176 (Phase 3.2 C# catalog YAMLs + loader),
+#         #179 (Phase 3.3 C# inter-procedural taint engine),
+#         #182 (Phase 3.3.b property flow + casts + var inference),
+#         #184 (Phase 3.4 scanner dispatch),
+#         #189 (native NuGet parser for .csproj + packages.lock.json).
+#       All landed for the next release line.
 #   - L7 (semantic): always works in principle but needs Anthropic creds
 SAVED_DOTNET=$(jq -r '.artifacts.json_report' "$DOTNET_OUTPUT")
 [[ -f "$SAVED_DOTNET" ]] || fail ".NET fixture: saved JSON report missing at $SAVED_DOTNET"

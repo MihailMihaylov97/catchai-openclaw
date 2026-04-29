@@ -34,9 +34,13 @@
     <PackageReference Include="System.Text.Encodings.Web" Version="4.7.0" />
 
     <!--
-      Microsoft.Data.SqlClient 2.0.0 — needed for SqlCommand /
-      SqlConnection symbols used by the L2/L5 SQL-injection chain.
-      Older line; carries known advisories of its own.
+      Microsoft.Data.SqlClient 2.0.0 — required for SqlCommand /
+      SqlConnection symbols used by the L2/L5 SQL-injection chain in
+      Controllers/UserController.cs. CVE coverage on this package is
+      not the load-bearing piece (Newtonsoft.Json + System.Text.
+      Encodings.Web above are the deterministic L1 hits); pinning
+      an older line here is a "compiles + may surface advisories"
+      bonus, not a contract.
     -->
     <PackageReference Include="Microsoft.Data.SqlClient" Version="2.0.0" />
   </ItemGroup>
