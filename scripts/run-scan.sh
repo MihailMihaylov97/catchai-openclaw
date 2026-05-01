@@ -140,4 +140,11 @@ fi
 
 cat "$ERR_FILE" >&2
 cat "$OUT_FILE"
+
+# Per the contract documented at the top of this file, exit 0 covers both
+# "scan completed clean" and "scan completed with findings". catchai itself
+# uses exit 1 to signal blocking findings; that's still a successful scan
+# from the adapter's perspective. Only real binary errors (handled above)
+# escape as a non-zero exit.
+[[ $RC -eq 1 ]] && RC=0
 exit "$RC"

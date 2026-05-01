@@ -42,8 +42,9 @@ command -v python3 >/dev/null 2>&1 || fail "python3 is required for schema valid
 OUTPUT="$(mktemp)"
 trap 'rm -f "$OUTPUT"' EXIT
 
-if ! "$REPO_ROOT/scripts/run-scan.sh" "$FIXTURE" >"$OUTPUT" 2>/dev/null; then
-    rc=$?
+rc=0
+"$REPO_ROOT/scripts/run-scan.sh" "$FIXTURE" >"$OUTPUT" 2>/dev/null || rc=$?
+if (( rc != 0 )); then
     fail "run-scan.sh exited with $rc on $FIXTURE"
 fi
 ok "run-scan.sh exited 0"
