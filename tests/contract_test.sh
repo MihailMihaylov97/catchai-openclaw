@@ -313,5 +313,162 @@ fi
 # Cleanup the second temp file
 rm -f "$JAVA_OUTPUT"
 
+# ----- 7. .NET fixture: same envelope checks + per-layer presence ---------
+#
+# Phase 4 of the .NET parity work (docs/dev/CATCHAI_DOTNET.md in the
+# catchai source repo). The .NET code path goes through different
+# rules (L2 C# SAST, L6 C# authz, L4 .NET config audit, L5 C#
+# inter-procedural taint) than Java/Python; without this fixture in
+# CI, regressions in the .NET path land silently.
+#
+# Same per-layer ≥ 1 regression net as the Java block — if a future
+# PR breaks any layer's .NET coverage, this test fails immediately
+# and loudly: "expected at least 1 X finding, got 0".
+
+DOTNET_FIXTURE="$REPO_ROOT/fixtures/vulnerable-dotnet-app"
+DOTNET_OUTPUT="$(mktemp)"
+
+[[ -d "$DOTNET_FIXTURE" ]] || fail ".NET fixture missing: $DOTNET_FIXTURE"
+
+dotnet_rc=0
+"$REPO_ROOT/scripts/run-scan.sh" "$DOTNET_FIXTURE" >"$DOTNET_OUTPUT" 2>/dev/null || dotnet_rc=$?
+if [[ $dotnet_rc -ne 0 && $dotnet_rc -ne 1 ]]; then
+    fail "run-scan.sh exited with $dotnet_rc on .NET fixture (binary error)"
+fi
+ok ".NET run-scan.sh exited $dotnet_rc"
+
+if ! jq -e . "$DOTNET_OUTPUT" >/dev/null 2>&1; then
+    fail ".NET fixture output is not valid JSON"
+fi
+ok ".NET fixture output is valid JSON"
+
+python3 - "$DOTNET_OUTPUT" "$SCHEMA" <<'PY'
+import json
+import sys
+
+import jsonschema
+
+with open(sys.argv[1]) as f:
+    payload = json.load(f)
+with open(sys.argv[2]) as f:
+    schema = json.load(f)
+
+try:
+    jsonschema.validate(payload, schema)
+except jsonschema.ValidationError as exc:
+    print(f"FAIL: .NET fixture schema validation: {exc.message}", file=sys.stderr)
+    sys.exit(1)
+PY
+ok ".NET fixture matches openclaw-v1 schema"
+
+# Per-layer presence — same gating model as the Java block. Layers
+# split by current binary readiness:
+#   - REQUIRED_LAYERS_DOTNET: ecosystem-agnostic; always shipping in v0.0.1
+#       L1 (dependency): Trivy/Grype both speak NuGet via PackageReference
+#       L3 (secrets):    gitleaks regexes are language-agnostic
+#   - PENDING_LAYERS_AS_OF_DOTNET: each entry is `layer:min-catchai-version`.
+#       Once installed catchai >= that version, the layer is enforced
+#       (a 0-finding count fails the test). Until then, missing
+#       findings emit an informational warning.
+#   - FUTURE_LAYERS_DOTNET: blocked on later phases — currently empty.
+#       The .NET initiative shipped L1/L2/L4/L5/L6 in catchai PRs:
+#         #161 (Phase 1.1 framework catalog),
+#         #165 (Phase 1.2 L2 C# SAST rules),
+#         #166 (Phase 1.3 L6 C# authz rules),
+#         #170 (Phase 2   L4 .NET appsettings.json rules),
+#         #175 (Phase 3.1 C# callgraph + tree-sitter wrapper),
+#         #176 (Phase 3.2 C# catalog YAMLs + loader),
+#         #179 (Phase 3.3 C# inter-procedural taint engine),
+#         #182 (Phase 3.3.b property flow + casts + var inference),
+#         #184 (Phase 3.4 scanner dispatch),
+#         #189 (native NuGet parser for .csproj + packages.lock.json).
+#       All landed for the next release line.
+#   - L7 (semantic): always works in principle but needs Anthropic creds
+SAVED_DOTNET=$(jq -r '.artifacts.json_report' "$DOTNET_OUTPUT")
+[[ -f "$SAVED_DOTNET" ]] || fail ".NET fixture: saved JSON report missing at $SAVED_DOTNET"
+
+REQUIRED_LAYERS_DOTNET=(dependency secrets)
+# layer:min-version pairs for .NET. All four layers shipped in the
+# same release line (0.0.2) since the entire .NET initiative landed
+# on dev in the same cycle as Java Phase 3. Once catchai 0.0.2 ships,
+# each gate fires hard if the corresponding code path silently
+# regresses on the .NET fixture.
+#   sast  → 0.0.2  Phase 1.2 C# SAST rules
+#   authz → 0.0.2  Phase 1.3 C# authz rules
+#   infra → 0.0.2  Phase 2   .NET config audit (appsettings.json
+#                  DetailedErrors + plaintext ConnectionStrings password)
+#   taint → 0.0.2  Phase 3   C# inter-procedural taint
+#                  ([FromQuery] → ProjectService.OpenProject →
+#                  Path.Combine → File.ReadAllBytes detected end-to-end)
+PENDING_LAYERS_AS_OF_DOTNET=(
+    "sast:0.0.2"
+    "authz:0.0.2"
+    "infra:0.0.2"
+    "taint:0.0.2"
+)
+FUTURE_LAYERS_DOTNET=()
+
+for layer in "${REQUIRED_LAYERS_DOTNET[@]}"; do
+    count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED_DOTNET")
+    if [[ "$count" -lt 1 ]]; then
+        fail ".NET fixture: expected at least 1 $layer finding, got $count"
+    fi
+    ok ".NET fixture: $layer found $count finding(s)"
+done
+
+for entry in "${PENDING_LAYERS_AS_OF_DOTNET[@]}"; do
+    colons=$(awk -F: '{print NF-1}' <<<"$entry")
+    if [[ "$colons" -ne 1 ]]; then
+        fail "PENDING_LAYERS_AS_OF_DOTNET entry '$entry' has $colons colons; expected exactly 1 (format: layer:semver)"
+    fi
+    IFS=':' read -r layer min_version <<<"$entry"
+    if [[ -z "$layer" || -z "$min_version" ]]; then
+        fail "PENDING_LAYERS_AS_OF_DOTNET entry '$entry' has empty layer or version"
+    fi
+    if ! [[ "$min_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.+-]+)?$ ]]; then
+        fail "PENDING_LAYERS_AS_OF_DOTNET entry '$entry': '$min_version' is not a valid semver"
+    fi
+
+    count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED_DOTNET")
+    lower=$(printf '%s\n%s\n' "$min_version" "$ACTUAL_VERSION" | sort -V | head -1)
+    if [[ "$lower" == "$min_version" ]]; then
+        if [[ "$count" -lt 1 ]]; then
+            fail ".NET fixture: $layer enforced as of catchai $min_version (you have $ACTUAL_VERSION) — got 0 findings"
+        fi
+        ok ".NET fixture: $layer found $count finding(s) (enforced as-of $min_version)"
+    else
+        if [[ "$count" -lt 1 ]]; then
+            echo "  (pending: $layer requires catchai >= $min_version; current $ACTUAL_VERSION — 0 findings is OK for now)" >&2
+        else
+            ok ".NET fixture: $layer found $count finding(s) early (will be enforced from $min_version)"
+        fi
+    fi
+done
+
+# Future layers — informational only. Empty for .NET (every shipped
+# layer landed in catchai 0.0.2 and is in PENDING above); promote any
+# newly-ready layer into PENDING_LAYERS_AS_OF_DOTNET in the same PR.
+# `${arr[@]+...}` expansion is required because `set -u` aborts on an
+# empty-array indexed expansion in older Bash; the `+` form expands
+# to nothing when unset/empty and the loop is skipped cleanly.
+for layer in ${FUTURE_LAYERS_DOTNET[@]+"${FUTURE_LAYERS_DOTNET[@]}"}; do
+    count=$(jq "[.findings[] | select(.layer==\"$layer\")] | length" "$SAVED_DOTNET")
+    if [[ "$count" -ge 1 ]]; then
+        ok ".NET fixture: $layer found $count finding(s) (future → ready, consider promoting to PENDING_LAYERS_AS_OF_DOTNET)"
+    fi
+done
+
+dotnet_l7_count=$(jq "[.findings[] | select(.layer==\"semantic\" and .severity != \"info\")] | length" "$SAVED_DOTNET")
+dotnet_l7_skipped=$(jq "[.findings[] | select(.rule_id == \"layer7-health/missing-credentials\")] | length" "$SAVED_DOTNET")
+if [[ "$dotnet_l7_skipped" -gt 0 ]]; then
+    echo "  (L7 skipped — no Anthropic credentials configured)" >&2
+elif [[ "$dotnet_l7_count" -lt 1 ]]; then
+    echo "  (warn: L7 ran but produced no semantic findings on .NET fixture)" >&2
+else
+    ok ".NET fixture: semantic found $dotnet_l7_count finding(s)"
+fi
+
+rm -f "$DOTNET_OUTPUT"
+
 echo ""
 echo "All contract checks passed."
