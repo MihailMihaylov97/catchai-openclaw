@@ -157,4 +157,4 @@ PRs welcome on:
 - `tests/contract_test.sh` (additional invariants)
 
 PRs that try to reverse-engineer the catchai binary, ship detection
-logic, or include rule sets will be closed.
+logic, or include rule sets will be closed!
