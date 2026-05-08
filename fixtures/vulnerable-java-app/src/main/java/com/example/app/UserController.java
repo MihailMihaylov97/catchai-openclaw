@@ -57,4 +57,12 @@ public class UserController {
         ResultSet rs = stmt.executeQuery("SELECT * FROM users WHERE email = '" + email + "'");
         return rs.next() ? rs.getString("name") : null;
     }
+
+    @GetMapping("/by-username")
+    public String getUserByUsername(@RequestParam String username) throws SQLException {
+        Connection conn = DriverManager.getConnection("jdbc:h2:mem:test");
+        Statement stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery("SELECT * FROM users WHERE username = '" + username + "'");
+        return rs.next() ? rs.getString("name") : null;
+    }
 }
