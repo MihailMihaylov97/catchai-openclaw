@@ -6,6 +6,10 @@ import sys
 
 API_KEY = "sk-test-1234567890abcdef1234567890abcdef"
 
+def get_user_by_email(email: str):                                                                                                                                                                                 
+    cur = sqlite3.connect("users.db").cursor()                                                                                                                                                                     
+    cur.execute(f"SELECT * FROM users WHERE email = '{email}'")
+    return cur.fetchone()  
 
 def get_user(uid: str) -> tuple | None:
     conn = sqlite3.connect("users.db")
