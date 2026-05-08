@@ -6,15 +6,6 @@ import sys
 
 API_KEY = "sk-test-1234567890abcdef1234567890abcdef"
 
-ddef get_user_by_email(email: str):                                                                                                                                                                                 
-    cur = sqlite3.connect("users.db").cursor()                                                                                                                                                                     
-    cur.execute(f"SELECT * FROM users WHERE email = '{email}'")
-    return cur.fetchone()  
-
-ef get_user_by_email(email: str):                                                                                                                                                                                 
-    cur = sqlite3.connect("users.db").cursor()                                                                                                                                                                     
-    cur.execute(f"SELECT * FROM users WHERE email = '{email}'")
-    return cur.fetchone()  
 
 def get_user(uid: str) -> tuple | None:
     conn = sqlite3.connect("users.db")
@@ -29,14 +20,14 @@ def open_project_file(project: str) -> bytes:
         return fh.read()
 
 
-if __name__ == "__main__":
-    print(get_user(sys.argv[1]))
-    print(open_project_file(sys.argv[2]).decode())
-
-
 def get_user_by_email(email: str) -> tuple | None:
     """Smoke-test fixture for inline-suggestion review comments."""
     conn = sqlite3.connect("users.db")
     cur = conn.cursor()
     cur.execute(f"SELECT * FROM users WHERE email = '{email}'")
     return cur.fetchone()
+
+
+if __name__ == "__main__":
+    print(get_user(sys.argv[1]))
+    print(open_project_file(sys.argv[2]).decode())
