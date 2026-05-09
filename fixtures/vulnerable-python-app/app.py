@@ -24,7 +24,7 @@ def get_user_by_email(email: str) -> tuple | None:
     """Smoke-test fixture for inline-suggestion review comments."""
     conn = sqlite3.connect("users.db")
     cur = conn.cursor()
-    cur.execute(f"SELECT * FROM users WHERE email = '{email}'")
+    cur.execute("SELECT * FROM users WHERE email = ?", (email,))
     return cur.fetchone()
 
 
