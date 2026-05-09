@@ -62,7 +62,9 @@ public class UserController {
     public String getUserByUsername(@RequestParam String username) throws SQLException {
         Connection conn = DriverManager.getConnection("jdbc:h2:mem:test");
         Statement stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery("SELECT * FROM users WHERE username = '" + username + "'");
+PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE username = ?");
+        stmt.setString(1, username);
+        ResultSet rs = stmt.executeQuery();
         return rs.next() ? rs.getString("name") : null;
     }
 }
