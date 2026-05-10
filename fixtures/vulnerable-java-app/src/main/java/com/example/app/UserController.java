@@ -49,4 +49,24 @@ public class UserController {
     public void deleteUser(@PathVariable String id) {
         // remove
     }
+
+    @GetMapping("/by-email")
+    public String getUserByEmail(@RequestParam String email) throws SQLException {
+        Connection conn = DriverManager.getConnection("jdbc:h2:mem:test");
+        Statement stmt = conn.createStatement();
+        ResultSet rs = stmt.executeQuery("SELECT * FROM users WHERE email = '" + email + "'");
+        return rs.next() ? rs.getString("name") : null;
+    }
+
+    @GetMapping("/by-username")
+    public String getUserByUsername(@RequestParam String username) throws SQLException {
+        Connection conn = DriverManager.getConnection("jdbc:h2:mem:test");
+        Statement stmt = conn.createStatement();
+PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE username = ?");
+        stmt.setString(1, username);
+        ResultSet rs = stmt.executeQuery();
+        return rs.next() ? rs.getString("name") : null;
+    }
 }
+
+

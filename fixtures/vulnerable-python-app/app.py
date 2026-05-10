@@ -20,6 +20,22 @@ def open_project_file(project: str) -> bytes:
         return fh.read()
 
 
+def get_user_by_email(email: str) -> tuple | None:
+    """Smoke-test fixture for inline-suggestion review comments."""
+    conn = sqlite3.connect("users.db")
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email = ?", (email,))
+    return cur.fetchone()
+
+
 if __name__ == "__main__":
     print(get_user(sys.argv[1]))
     print(open_project_file(sys.argv[2]).decode())
+ # add one blank line
+ # add one blank line
+ # add one blank line
+ # add one blank line
+ # add one blank line
+
+
+
