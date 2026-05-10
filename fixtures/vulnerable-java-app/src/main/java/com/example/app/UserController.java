@@ -68,3 +68,4 @@ PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE userna
         return rs.next() ? rs.getString("name") : null;
     }
 }
+
